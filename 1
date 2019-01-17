@@ -1,0 +1,257 @@
+#include <iostream>
+#include <fstream>
+#include <ctime>
+
+using namespace std;
+
+//Прямой порядок обхода
+#define travel_direction 0
+//Обратный порядок обхода
+#define travel_reverse 1
+//Случайный порядок обхода
+#define travel_random 2
+//Количество повторов процедуры обхода
+#define cycle_count 1000
+//Название файла отчета
+#define report_file_name "cache_report.txt"
+
+string report_order_str[3] = { "direction", "reverse", "random" };
+
+/*Класс для эксперемента*/
+class CacheExperement {
+public:
+	//Конструктор в качестве входного параметра принимает размер буфера для варианта 
+	//случайного заполнения с использованием генератора случайных чисел
+	CacheExperement(const int buffer_size);
+
+	//Конструктор в качестве входного параметра принимает размер буфера и имя входного файла для варианта 
+	//чтения данных из файла
+	CacheExperement(const int buffer_size, const char *file_name);
+
+	//Деструктор
+	~CacheExperement();
+
+	//Прогревание кеша
+	void warmingup();
+
+	//Циклический проход. Порядок прохода задается параметром order
+	void cycle(const char order);
+
+	//Получение времени эксперимента
+	int get_duration(void) {
+		return duration;
+	}
+private:
+	int duration = 0;
+	int buffer_size = 0;
+	char *buffer = nullptr;
+};
+
+//Конструктор в качестве входного параметра принимает размер буфера для варианта 
+//случайного заполнения с использованием генератора случайных чисел
+CacheExperement::CacheExperement(const int buffer_size) {
+	this->buffer = new char [buffer_size];
+	this->buffer_size = buffer_size;
+
+	//Инициализация встроенного генератора псевдо-случайных чисел от текущего времени 
+	std::srand((unsigned int)std::time(nullptr));
+
+	for (int i = 0; i < buffer_size; i++) {
+		this->buffer[i] = std::rand();
+	}
+}
+
+//Конструктор в качестве входного параметра принимает размер буфера и имя входного файла для варианта 
+//чтения данных из файла
+CacheExperement::CacheExperement(const int buffer_size, const char *file_name) {
+	char *file_data = nullptr;
+	ifstream in_file(file_name, ios::binary); //Открытие входного файла
+	int file_len;
+
+	//Переход к конец файла
+	in_file.seekg(0, ios_base::end);
+	//Получение позиции в конце файла
+	file_len = (int) in_file.tellg();
+	//Выделение памяти для данных из файла
+	char *file_buffer = new char[file_len];
+
+	//Возврат в начало файла
+	in_file.seekg(0);
+
+	//Посимвольное чтение файла в буфер
+	for (int i = 0; i < file_len; i++) {
+		in_file >> file_buffer[i];
+	}
+
+	//Закрытие файла
+	in_file.close();
+
+	//Выделение памяти под буфер
+	this->buffer = new char[buffer_size];
+	//Сохранение размера буфера в классе
+	this->buffer_size = buffer_size;
+	
+	int j = 0;
+	
+	//Копирование файлового буфера в буфер класса
+	for (int i = 0; i < buffer_size; i++) {
+		this->buffer[i] = file_buffer[j];
+		j++;
+
+		//Если дошли до конца файлового буфера, то переходим в начало
+		if (j == file_len) {
+			j = 0;
+		}
+	}
+}
+
+//Деструктор
+CacheExperement::~CacheExperement() {
+	if (this->buffer != nullptr) {
+		delete(this->buffer);
+	}
+}
+
+//Прогревание кеша с помощью чтения буфера и обработки считанных данных
+void CacheExperement::warmingup() {
+	char j, k;
+
+	for (int i = 0; i < this->buffer_size; i++) {
+		j = this->buffer[i];
+		k = j & std::rand();
+	}
+
+	return;
+}
+
+//Циклический проход
+void CacheExperement::cycle(const char order) {
+	char j;
+	int begin_time = 0;
+	int end_time = 0;
+
+	switch (order) {
+		case travel_direction: {
+			begin_time = clock();
+			for (int cycle = 0; cycle < cycle_count; cycle++) {
+				for (int i = 0; i < this->buffer_size; i++) {
+					j = this->buffer[i];
+				}
+			}
+			end_time = clock();
+			break;
+		}
+		case travel_reverse: {
+			begin_time = clock();
+			for (int cycle = 0; cycle < cycle_count; cycle++) {
+				for (int i = this->buffer_size; i != 0; i--) {
+					j = this->buffer[i];
+				}
+			}
+			end_time = clock();
+			break;
+		}
+		case travel_random: {
+			begin_time = clock();
+			for (int cycle = 0; cycle < cycle_count; cycle++) {
+				for (int i = 0; i < this->buffer_size; i++) {
+					j = this->buffer[std::rand() % buffer_size];
+				}
+			}
+			end_time = clock();
+			break;
+		}
+	}
+
+	this->duration = end_time - begin_time;
+
+	return;
+}
+
+/*Три первых входных параметра задают размеры кеша каждого уровня в байтах, 
+  четвертый параметр в случае его наличия задает имя файла, из которого происходит чтение данных*/
+int main(int argc, char*argv[]) 
+{
+	int duration = 0;
+	int cashe_sizes[3]; //Массив для размеров (в байтах) кешей каждого уровня
+	
+	int experement_cashe_sizes[5]; //Массив размеров (в байтах) буферов для эксперементов в серии
+	char experement_count = 0; //Количество эксперементов в серии
+
+	//Проверка количества входных параметров
+	if ((argc != 4) && (argc != 5)) {
+		cout << "Invalid input params" << endl;
+		return 1;
+	}
+
+	//Проверка существования файла, если он нужен
+	if (argc == 5) {
+		ifstream in_file(argv[4], ios::in);
+
+		if (!in_file.is_open()) {
+			cout << "Error open file " << argv[4] << endl;
+			return 1;
+		}
+
+		in_file.close();
+	}
+
+	//Обработка входных параметров
+	for (int i = 0; i < 3; i++) {
+		cashe_sizes[i] = atoi(argv[i+1]);
+	}
+
+	if (cashe_sizes[0] != 0) {
+		experement_cashe_sizes[0] = cashe_sizes[0] / 2;
+		experement_count = 2;
+	}
+
+	for (int i = 0; i < 3; i++) {
+		if (cashe_sizes[i] != 0) {
+			experement_cashe_sizes[i + 1] = cashe_sizes[i];
+			experement_cashe_sizes[i + 2] = cashe_sizes[i] + cashe_sizes[i] / 2;
+			experement_count ++;
+		}
+	}
+
+	ofstream report_file(report_file_name); //Открытие файла отчета
+	//Перебор серий по варианту прохода
+	for (int order = 0; order < 3; order++) {
+		cout << "Order " << order << endl;
+		report_file << "investigaion:" << endl;
+		report_file << "  travel_variant: " << report_order_str[order].c_str() << endl;
+		report_file << "  experiments:" << endl;
+		//Перебор внутри серии
+		for (int current_experement = 0; current_experement < experement_count; current_experement++) {
+			CacheExperement *experement;
+
+			cout << "Experement " << (current_experement + 1) << endl;
+			report_file << "  -experiment:" << endl;
+			report_file << "     number: " << (current_experement + 1) << endl;
+			report_file << "     input_data:" << endl;
+			report_file << "       buffer_size: \"" << experement_cashe_sizes[current_experement] << "\" bytes" << endl;
+			//Шаг 1
+			if (argc == 4) {
+				experement = new CacheExperement(experement_cashe_sizes[current_experement]);
+			}
+			else {
+				experement = new CacheExperement(experement_cashe_sizes[current_experement], argv[4]);
+			}
+
+			//Шаг 2
+			experement->warmingup();
+
+			//Шаг 3
+			experement->cycle(order);
+
+			//Получение времени обхода
+			duration = experement->get_duration();
+			report_file << "     results:" << endl;
+			report_file << "       duration: \"" << duration << "\" ms" << endl;
+			cout << "Duration " << duration << endl;
+			delete experement;
+		}
+	}
+	report_file.close();
+	return 0;
+}
